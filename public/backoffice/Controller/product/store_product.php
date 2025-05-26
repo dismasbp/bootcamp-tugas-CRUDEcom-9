@@ -24,10 +24,44 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
     $price = isset($_POST['price']) ? floatval($_POST['price']) : 0;
 
-    // Validate photo (optional, but check if string)
-    $photo = isset($_POST['photo']) ? trim($_POST['photo']) : '';
-    if ($photo !== '' && strlen($photo) > 255) {
-        $errors[] = "Photo URL is too long.";
+    // Handle photo upload
+    $photo = '';
+    if (isset($_FILES['image']) && $_FILES['image']['error'] !== UPLOAD_ERR_NO_FILE) {
+        if ($_FILES['image']['error'] === UPLOAD_ERR_OK) {
+            $allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+            $fileType = mime_content_type($_FILES['image']['tmp_name']);
+            if (!in_array($fileType, $allowedTypes)) {
+                $errors[] = "Invalid photo file type.";
+            } elseif ($_FILES['image']['size'] > 2 * 1024 * 1024) { // 2MB limit
+                $errors[] = "Photo file is too large (max 2MB).";
+            } else {
+                $ext = pathinfo($_FILES['image']['name'], PATHINFO_EXTENSION);
+                $newFileName = uniqid('product_', true) . '.' . $ext;
+                $uploadDir = __DIR__ . '/../../../img/product/';
+                if (!is_dir($uploadDir)) {
+                    mkdir($uploadDir, 0755, true);
+                }
+
+                // Remove previous photo if exists (expects previous photo path in $_POST['old_photo'])
+                if (!empty($_POST['image'])) {
+                    $oldPhotoPath = realpath($uploadDir . basename($_POST['image']));
+                    // Ensure the old photo is inside the upload directory for safety
+                    if ($oldPhotoPath && strpos($oldPhotoPath, realpath($uploadDir)) === 0 && file_exists($oldPhotoPath)) {
+                        unlink($oldPhotoPath);
+                    }
+                }
+
+                $uploadPath = $uploadDir . $newFileName;
+                if (move_uploaded_file($_FILES['image']['tmp_name'], $uploadPath)) {
+                    // Store relative path for DB
+                    $photo = '/img/product/' . $newFileName;
+                } else {
+                    $errors[] = "Failed to upload photo.";
+                }
+            }
+        } else {
+            $errors[] = "Error uploading photo.";
+        }
     }
 
     // Validate description (optional)

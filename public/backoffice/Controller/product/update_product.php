@@ -35,10 +35,40 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
     $price = isset($input['price']) ? floatval($input['price']) : 0;
 
-    // Validate photo (optional, but check if string)
-    $photo = isset($input['photo']) ? trim($input['photo']) : '';
-    if ($photo !== '' && strlen($photo) > 255) {
-        $errors[] = "Photo URL is too long.";
+    // Handle photo upload
+    $photo = $data['photo']; // Default to existing photo
+
+    if (isset($_FILES['photo']) && $_FILES['photo']['error'] !== UPLOAD_ERR_NO_FILE) {
+        $allowedTypes = ['image/jpeg', 'image/png', 'image/gif'];
+        $maxSize = 2 * 1024 * 1024; // 2MB
+
+        if ($_FILES['photo']['error'] !== UPLOAD_ERR_OK) {
+            $errors[] = "Error uploading photo.";
+        } elseif (!in_array($_FILES['photo']['type'], $allowedTypes)) {
+            $errors[] = "Invalid photo type. Only JPG, PNG, and GIF allowed.";
+        } elseif ($_FILES['photo']['size'] > $maxSize) {
+            $errors[] = "Photo size exceeds 2MB.";
+        } else {
+            // Delete old photo if exists and not empty
+            if (!empty($photo) && file_exists(__DIR__ . '/../../../' . $photo)) {
+                unlink(__DIR__ . '/../../../' . $photo);
+            }
+
+            // Generate unique filename
+            $ext = pathinfo($_FILES['photo']['name'], PATHINFO_EXTENSION);
+            $newFileName = uniqid('product_', true) . '.' . $ext;
+            $uploadDir = __DIR__ . '/../../../img/product/';
+            if (!is_dir($uploadDir)) {
+                mkdir($uploadDir, 0755, true);
+            }
+            $uploadPath = $uploadDir . $newFileName;
+
+            if (move_uploaded_file($_FILES['photo']['tmp_name'], $uploadPath)) {
+                $photo = '/img/product/' . $newFileName;
+            } else {
+                $errors[] = "Failed to save uploaded photo.";
+            }
+        }
     }
 
     // Validate description (optional)
